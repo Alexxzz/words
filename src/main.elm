@@ -3,12 +3,13 @@ module Main exposing (Meaning, Model, Msg(..), Translation, decodeMeaning, decod
 import Browser
 import Browser.Dom as Dom
 import Debug exposing (log)
-import Html exposing (Attribute, Html, br, button, div, form, input, label, li, p, span, text, ul)
-import Html.Attributes exposing (autocomplete, autofocus, class, for, id, style, type_, value)
+import Html exposing (Attribute, Html, br, button, div, form, input, label, li, p, section, span, text, ul)
+import Html.Attributes exposing (autocomplete, autofocus, class, for, id, placeholder, property, type_, value)
 import Html.Events exposing (keyCode, on, onClick, onInput, onSubmit)
 import Html.Keyed as Keyed
 import Http
 import Json.Decode as Decode exposing (decodeString, index)
+import Json.Encode exposing (string)
 import List exposing (isEmpty, map)
 import Maybe exposing (withDefault)
 import Task
@@ -55,9 +56,14 @@ type alias Translation =
 
 
 type alias Meaning =
-    { language : String
+    { language : Maybe Language
     , text : String
     }
+
+
+type Language
+    = NL
+    | EN
 
 
 
@@ -98,8 +104,11 @@ update msg model =
 translate : String -> Cmd Msg
 translate text =
     let
+        lowercaseText =
+            String.toLower text
+
         url =
-            "https://cors-anywhere.herokuapp.com/https://glosbe.com/gapi/translate?from=nl&dest=eng&format=json&pretty=true&phrase=" ++ text
+            "https://cors-anywhere.herokuapp.com/https://glosbe.com/gapi/translate?from=nl&dest=eng&format=json&pretty=true&phrase=" ++ lowercaseText
     in
     Http.send Translated (request url)
 
@@ -123,8 +132,27 @@ decodeTranslation =
 decodeMeaning : Decode.Decoder Meaning
 decodeMeaning =
     Decode.map2 Meaning
-        (Decode.field "language" Decode.string)
+        (Decode.field "language" decodeLanguage)
         (Decode.field "text" Decode.string)
+
+
+decodeLanguage : Decode.Decoder (Maybe Language)
+decodeLanguage =
+    Decode.string
+        |> Decode.andThen stringToLanguage
+
+
+stringToLanguage : String -> Decode.Decoder (Maybe Language)
+stringToLanguage str =
+    case str of
+        "nl" ->
+            Decode.succeed (Just NL)
+
+        "en" ->
+            Decode.succeed (Just EN)
+
+        _ ->
+            Decode.succeed Nothing
 
 
 request : String -> Http.Request (List Translation)
@@ -138,44 +166,51 @@ request url =
 
 view : Model -> Html Msg
 view model =
-    div [ class "container" ]
-        [ div [ class "card blue-grey darken-1" ]
-            [ div [ class "card-content white-text" ]
+    div
+        [ class "section"
+        ]
+        [ div
+            [ class "container level" ]
+            [ div
+                [ class "container" ]
                 [ div
-                    [ class "input-field" ]
-                    [ input
-                        [ onInput Change
-                        , onEnter Translate
-                        , value model.text
-                        , class "validate"
-                        , id "translation_input"
-                        , type_ "text"
-                        , autofocus True
-                        , autocomplete True
-                        ]
-                        []
-                    , label
-                        [ for "translation_input" ]
+                    [ class "field" ]
+                    [ label
+                        [ class "label" ]
                         [ text "Dutch" ]
+                    , div
+                        [ class "control" ]
+                        [ input
+                            [ class "input is-medium"
+                            , placeholder "Please enter text to translate"
+                            , onInput Change
+                            , onEnter Translate
+                            , value model.text
+                            , type_ "text"
+                            , autofocus True
+                            , autocomplete True
+                            ]
+                            []
+                        ]
                     ]
                 , div
-                    []
+                    [ class "container" ]
                     [ button
                         [ onClick Translate
-                        , class "waves-effect waves-light btn"
                         , type_ "submit"
+                        , class "button is-primary"
                         ]
                         [ text "Translate" ]
                     , button
                         [ onClick Reset
-                        , class "waves-effect waves-light btn"
                         , type_ "reset"
+                        , class "button is-outlined is-danger"
                         ]
                         [ text "Reset" ]
                     ]
-                , renderTranslations model.data
                 ]
             ]
+        , renderTranslations model.data
         ]
 
 
@@ -196,53 +231,34 @@ renderTranslations : RemoteData -> Html Msg
 renderTranslations translations =
     case log "state" translations of
         NotEntered ->
-            div [] [ text "Please, enter something" ]
+            div [ class "container notification is-fluid" ] [ text "Please, enter something" ]
 
         Loading ->
-            renderLinearLoading
+            renderLoading
 
         Empty ->
             div [] [ text "No results found :(" ]
 
         Data translated ->
-            ul [ class "collection" ] (List.map renderTranslation translated)
+            div [ class "container" ] (List.map renderTranslation translated)
 
         Error error ->
             div [] [ text ("Some Error! " ++ error) ]
 
 
-renderCircularLoading : Html Msg
-renderCircularLoading =
+renderLoading : Html Msg
+renderLoading =
     div
-        [ class "preloader-wrapper big active" ]
-        [ div
-            [ class "spinner-layer spinner-blue" ]
-            [ div
-                [ class "circle-clipper left" ]
-                [ div [ class "circle" ] [] ]
-            , div
-                [ class "gap-patch" ]
-                [ div [ class "circle" ] [] ]
-            , div
-                [ class "circle-clipper right" ]
-                [ div [ class "circle" ] [] ]
-            ]
-        ]
-
-
-renderLinearLoading : Html Msg
-renderLinearLoading =
-    div
-        [ class "progress" ]
-        [ div [ class "indeterminate" ] [] ]
+        [ class "container level-item" ]
+        [ div [ class "control is-large is-loading is-grey-darker" ] [] ]
 
 
 renderTranslation : Translation -> Html Msg
 renderTranslation translation =
-    li
-        [ class "collection-item" ]
-        [ span
-            [ class "blue-text text-darken-2" ]
+    div
+        [ class "container tile is-ancestor" ]
+        [ div
+            [ class "tile is-child box" ]
             [ text (withDefault "" translation.phrase)
             , renderMeanings translation.meanings
             ]
@@ -253,7 +269,7 @@ renderMeanings : Maybe (List Meaning) -> Html Msg
 renderMeanings meanings =
     case meanings of
         Just m ->
-            ul [ class "collection" ] (List.map renderMeaning m)
+            div [ class "" ] (List.map renderMeaning m)
 
         Nothing ->
             div [] []
@@ -261,13 +277,48 @@ renderMeanings meanings =
 
 renderMeaning : Meaning -> Html Msg
 renderMeaning meaning =
-    li
-        [ class "collection-item" ]
-        [ span
-            [ class "blue-text text-darken-2" ]
-            [ text meaning.text
+    div
+        [ class "tile is-child box" ]
+        [ p
+            [ class ("notification " ++ meaningStyle meaning.language) ]
+            [ text <| "Language: " ++ languageToString meaning.language
+            , br [] []
+            , postBody meaning.text
             ]
         ]
+
+
+meaningStyle : Maybe Language -> String
+meaningStyle l =
+    case l of
+        Just NL ->
+            "is-primary"
+
+        Just EN ->
+            "is-info"
+
+        _ ->
+            ""
+
+
+languageToString : Maybe Language -> String
+languageToString l =
+    case l of
+        Just NL ->
+            "NL"
+
+        Just EN ->
+            "EN"
+
+        _ ->
+            ""
+
+
+postBody : String -> Html msg
+postBody html =
+    Html.node "rendered-html"
+        [ property "content" <| string html ]
+        []
 
 
 
