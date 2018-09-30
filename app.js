@@ -1,8 +1,8 @@
-(function () {
-  'use strict';
+(function() {
+  "use strict";
 
   // ELM
-  Elm.Main.init({node: document.querySelector('main')});
+  Elm.Main.init({ node: document.querySelector("main") });
 
   customElements.define(
     "rendered-html",
@@ -25,15 +25,9 @@
   );
 
   // Service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker
-    .register('./service-worker.js')
-    .then(function () {
-      console.log('Service Worker Registered');
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js").then(function() {
+      console.log("Service Worker Registered");
     });
-  }
-
-  window.fetch = function() {
-    console.log('FAKE FETCH!');
   }
 })();

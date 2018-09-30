@@ -52,6 +52,7 @@ type RemoteData
 type alias Translation =
     { phrase : Maybe String
     , meanings : Maybe (List Meaning)
+    , isExtended : Bool
     }
 
 
@@ -75,6 +76,7 @@ type Msg
     | Translate
     | Translated (Result Http.Error (List Translation))
     | Reset
+    | Extend Translation
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -100,6 +102,22 @@ update msg model =
         Change newContent ->
             ( { model | text = newContent }, Cmd.none )
 
+        Extend translation ->
+            case model.data of
+                Data translations ->
+                    let
+                        mapper tr =
+                            if tr == translation then
+                                { tr | isExtended = True }
+
+                            else
+                                tr
+                    in
+                    ( { model | data = Data (List.map mapper translations) }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
 
 translate : String -> Cmd Msg
 translate text =
@@ -120,13 +138,14 @@ decodeTranslations =
 
 decodeTranslation : Decode.Decoder Translation
 decodeTranslation =
-    Decode.map2 Translation
+    Decode.map3 Translation
         (Decode.maybe
             (Decode.at [ "phrase", "text" ] Decode.string)
         )
         (Decode.maybe
             (Decode.field "meanings" (Decode.list decodeMeaning))
         )
+        (Decode.succeed False)
 
 
 decodeMeaning : Decode.Decoder Meaning
@@ -194,7 +213,7 @@ view model =
                         ]
                     ]
                 , div
-                    [ class "container" ]
+                    [ class "buttons" ]
                     [ button
                         [ onClick Translate
                         , type_ "submit"
@@ -237,39 +256,51 @@ renderTranslations translations =
             renderLoading
 
         Empty ->
-            div [] [ text "No results found :(" ]
+            div [ class "notification is-warning" ] [ text "No results found :(" ]
 
         Data translated ->
             div [ class "container" ] (List.map renderTranslation translated)
 
         Error error ->
-            div [] [ text ("Some Error! " ++ error) ]
+            div [ class "notification is-warning" ] [ text ("Some Error! " ++ error) ]
 
 
 renderLoading : Html Msg
 renderLoading =
     div
-        [ class "container level-item" ]
+        [ class "container level-item Columns" ]
         [ div [ class "control is-large is-loading is-grey-darker" ] [] ]
 
 
 renderTranslation : Translation -> Html Msg
 renderTranslation translation =
     div
-        [ class "container tile is-ancestor" ]
-        [ div
-            [ class "tile is-child box" ]
-            [ text (withDefault "" translation.phrase)
-            , renderMeanings translation.meanings
+        [ class "container  box" ]
+        [ div [ class "" ]
+            [ div
+                [ class "" ]
+                [ text (withDefault "" translation.phrase) ]
             ]
+        , renderMeanings translation
         ]
 
 
-renderMeanings : Maybe (List Meaning) -> Html Msg
-renderMeanings meanings =
-    case meanings of
+renderMeanings : Translation -> Html Msg
+renderMeanings translation =
+    case translation.meanings of
         Just m ->
-            div [ class "" ] (List.map renderMeaning m)
+            if translation.isExtended then
+                div [ class "" ] (List.map renderMeaning m)
+
+            else
+                div [ class "level-right" ]
+                    [ button
+                        [ onClick <| Extend translation
+                        , type_ "submit"
+                        , class "button is-primary level-item"
+                        ]
+                        [ text "Meanings" ]
+                    ]
 
         Nothing ->
             div [] []
